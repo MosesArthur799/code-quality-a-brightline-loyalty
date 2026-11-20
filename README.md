@@ -1,3 +1,4 @@
+
 # Brightline Loyalty Service
  
 A Java service that calculates loyalty points from a member's tier and purchase amount. It uses an in-memory member repository and includes a command-line demo. It is a refactoring of an AI-generated starter that compiled and passed its tests but hid failures, hard-wired its dependencies and could not be extended safely.
@@ -216,8 +217,10 @@ Result m1, GHS abc -> Purchase amount is not a number: abc
  
 * The base-points formula (one point per GHS 10) lives in `PointsCalculator` as a named constant and one private method, not in a separate class.
 * `PointsCalculator` has one `catch`, for `ArithmeticException`, to turn an overflow into `InvalidPurchaseException` with context.
+* An overflow is reported as `InvalidPurchaseException`, not a separate exception type, because an amount too large to award points for is an input the service cannot honour. The caller handles it like any other invalid purchase, and the original `ArithmeticException` is kept as the cause.
 * `MemberId` rejects null or blank values with `IllegalArgumentException`, which is outside the `BrightlineLoyaltyException` hierarchy.
 * `Demo` parses text amounts itself (`Demo.parseAmount`), so `Purchase` only ever receives a `BigDecimal`.
 * `Demo` logs unexpected failures at `SEVERE` and continues with the next example, as described in section 7.
 * The `STANDARD` rule applies a multiplier of 1, so every tier goes through the same rule interface.
+ 
  

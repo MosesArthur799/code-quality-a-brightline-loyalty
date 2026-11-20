@@ -5,18 +5,18 @@ A Java service that calculates loyalty points from a member's tier and purchase 
  
 > **Pre-coding analysis:** [ANALYSIS.md](ANALYSIS.md) was written before any code. It records what was wrong with the inherited code and which of its three tests proved nothing. It is left unchanged. This README describes what was built and why.
  
-> **Coding standard:** references such as [§12.2](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=29) point to the [AmaliTech Coding Standards, Java Edition (2026)](docs/AmaliTech_Coding_Standards_Java_Edition.pdf) kept in this repository. Each reference opens the PDF, and the table below gives the page that holds the rule.
+> **Coding standard:** references such as [§12.2](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=29) point to the [AmaliTech Coding Standards, Java Edition (2026)](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true) kept in this repository. Each reference opens the PDF, and the table below gives the page that holds the rule.
  
 | Rule | What it requires | PDF page |
 | --- | --- | --- |
-| [§3.4](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=6) | Replace magic numbers with named constants | 6 |
-| [§4.1](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=8), [§4.2](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=9) | Methods are small and do one thing | 8, 9 |
-| [§4.4](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=10) | No side effects in a method | 10 |
-| [§6.1](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=14), [§6.3](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=15) | Do not ignore caught exceptions; add context when rethrowing | 14, 15 |
-| [§9](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=22) | Test coverage and meaningful assertions | 22 |
-| [§12.1](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=28) | Single-responsibility principle | 28 |
-| [§12.2](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=29) | Open-closed principle | 29 |
-| [§12.5](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=31) | Dependency inversion principle | 31 |
+| [§3.4](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=6) | Replace magic numbers with named constants | 6 |
+| [§4.1](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=8), [§4.2](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=9) | Methods are small and do one thing | 8, 9 |
+| [§4.4](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=10) | No side effects in a method | 10 |
+| [§6.1](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=14), [§6.3](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=15) | Do not ignore caught exceptions; add context when rethrowing | 14, 15 |
+| [§9](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=22) | Test coverage and meaningful assertions | 22 |
+| [§12.1](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=28) | Single-responsibility principle | 28 |
+| [§12.2](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=29) | Open-closed principle | 29 |
+| [§12.5](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=31) | Dependency inversion principle | 31 |
  
 ---
  
@@ -102,15 +102,15 @@ Each decision answers a problem recorded in ANALYSIS.md.
  
 | ANALYSIS.md problem | Decision | Standard |
 | --- | --- | --- |
-| Defect 1: tier rules in an `if/else if` chain with no final `else` | One `TierPointsRule` class per tier. `TierPointsRuleResolver` receives the list from outside and throws `UnknownTierException` when a tier has no rule. It never falls back to a default multiplier. | [§12.2](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=29) |
-| Defect 2: `catch (Exception e) { return 0; }` hid every failure | No catch-all. `PointsCalculator` catches only `ArithmeticException` and rethrows it with context. Other failures reach the caller. | [§6.1](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=14), [§6.3](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=15) |
-| Defect 3: the calculator built its own repository | Repository, resolver and bonus policy are injected through the constructor. `LoyaltyServiceFactory` is the one place that wires production objects. | [§12.5](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=31) |
+| Defect 1: tier rules in an `if/else if` chain with no final `else` | One `TierPointsRule` class per tier. `TierPointsRuleResolver` receives the list from outside and throws `UnknownTierException` when a tier has no rule. It never falls back to a default multiplier. | [§12.2](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=29) |
+| Defect 2: `catch (Exception e) { return 0; }` hid every failure | No catch-all. `PointsCalculator` catches only `ArithmeticException` and rethrows it with context. Other failures reach the caller. | [§6.1](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=14), [§6.3](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=15) |
+| Defect 3: the calculator built its own repository | Repository, resolver and bonus policy are injected through the constructor. `LoyaltyServiceFactory` is the one place that wires production objects. | [§12.5](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=31) |
 | Defect 4: purchase never validated | `Purchase` validates itself when it is created. The amount is a `BigDecimal`. `PointsCalculator` rejects a null purchase. | none directly in the standard |
 | Defect 5: `null` returned for a missing member | `MemberRepository.findById` returns `Optional<Member>`. | none directly in the standard |
-| Defect 6: one method doing six jobs | Lookup, tier rule, bonus and output each have their own class. `calculatePoints` only coordinates. | [§12.1](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=28), [§4.1](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=8), [§4.2](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=9) |
+| Defect 6: one method doing six jobs | Lookup, tier rule, bonus and output each have their own class. `calculatePoints` only coordinates. | [§12.1](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=28), [§4.1](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=8), [§4.2](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=9) |
 | Defect 7: `String` tier and `double` money | `Tier` enum, `BigDecimal` amounts, `MemberId` value type, and records that reject null fields. | none directly in the standard |
-| Defect 8: magic numbers | Named constants in each class that needs one. | [§3.4](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=6) |
-| Defect 9: `System.out.println` inside the calculation | The calculation prints nothing. Only `Demo` writes output. | [§4.4](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=10) |
+| Defect 8: magic numbers | Named constants in each class that needs one. | [§3.4](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=6) |
+| Defect 9: `System.out.println` inside the calculation | The calculation prints nothing. Only `Demo` writes output. | [§4.4](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=10) |
  
 ## 6. Adding a New Tier
  
@@ -160,7 +160,7 @@ The suite uses JUnit 5 and Mockito. `PointsCalculatorTest` injects a Mockito moc
  
 **Results.** The last saved Maven run (JDK 25.0.5, 2026-11-19) recorded 73 tests with 0 failures, 0 errors and 0 skipped.
  
-**Coverage.** The JaCoCo report saved by that run recorded 614 of 636 instructions (96.54%), 144 of 149 lines and 24 of 24 branches. The only uncovered code is the two catch handlers in `Demo.main`. The standard ([§9](docs/AmaliTech_Coding_Standards_Java_Edition.pdf#page=22)) asks for 100% coverage of statements and branches, so this is a known gap.
+**Coverage.** The JaCoCo report saved by that run recorded 614 of 636 instructions (96.54%), 144 of 149 lines and 24 of 24 branches. The only uncovered code is the two catch handlers in `Demo.main`. The standard ([§9](AmaliTech_Coding_Standards_Java_Edition.pdf?raw=true#page=22)) asks for 100% coverage of statements and branches, so this is a known gap.
  
 **Not asserted by any test:** the `Objects.requireNonNull` checks in the constructors of `PointsCalculator` and `TierPointsRuleResolver`.
  

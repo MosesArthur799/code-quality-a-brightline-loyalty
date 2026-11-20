@@ -1,40 +1,37 @@
 # Brightline Loyalty Service
-
-A Java service that calculates loyalty points from a member's tier and purchase amount. It uses an in-memory member repository and includes a command-line demo. This project refactors the inherited implementation described in [ANALYSIS.md](ANALYSIS.md).
-
-> **Pre-coding check-in:** [ANALYSIS.md](ANALYSIS.md) is the analysis and planned approach written before any code. It is left unchanged. This README describes what was built.
-
+ 
+A Java service that calculates loyalty points from a member's tier and purchase amount. It uses an in-memory member repository and includes a command-line demo. It is a refactoring of an AI-generated starter that compiled and passed its tests but hid failures, hard-wired its dependencies and could not be extended safely.
+ 
+> **Pre-coding analysis:** [ANALYSIS.md](ANALYSIS.md) was written before any code. It records what was wrong with the inherited code and which of its three tests proved nothing. It is left unchanged. This README describes what was built and why.
+ 
 ---
-
+ 
 ## 1. Deliverables Map
-
-| # | Deliverable | Where it is |
+ 
+| # | Brief deliverable | Where it is |
 | --- | --- | --- |
 | 1 | Analysis of the inherited code and tests | [ANALYSIS.md](ANALYSIS.md), sections 2 and 3 |
-| 2 | Refactored code, injected dependencies, and extensible tier rules | `src/main/java/com/brightline/loyalty/`, sections 4 to 6 |
-| 3 | Domain exceptions and error handling | `exception/` package, section 7 |
-| 4 | JUnit 5 and Mockito test suite | `src/test/java/com/brightline/loyalty/`, section 8 |
-| 5 | Design decisions and what was kept, fixed, or rewritten | Sections 5, 6, 11, and 12 |
-| 6 | Improvement beyond the brief: parameterized tests | Section 9 |
-
+| 2 | Refactored code (one job per class, injected dependencies, new tier fits) | `src/main/java/com/brightline/loyalty/`, sections 4 to 6 below |
+| 3 | Exception handling and custom exceptions | `exception/` package, section 7 below |
+| 4 | JUnit 5 and Mockito test suite | `src/test/java/com/brightline/loyalty/`, section 8 below |
+| 5 | Rationale: decisions, new tier, kept / fixed / rewritten | Sections 5, 6 and 11 below |
+| 6 | One improvement beyond the brief | Parameterized tests, section 9 below |
+ 
 ## 2. Business Rules
-
-These are the behaviours observed in the inherited code and recorded in `ANALYSIS.md`:
-
+ 
 * Base points are one point per complete GHS 10; fractional points are discarded. For example, GHS 99.99 earns 9 base points.
-* The member's tier rule is applied to the base points:
-
+* The member's tier rule is applied to base points:
   | Tier | Calculation |
   | --- | --- |
   | `STANDARD` | 1x base points |
-  | `SILVER` | 1.5x base points, truncated to a whole point |
+  | `SILVER` | 1.5x base points, rounded down |
   | `GOLD` | 2x base points |
-
-* A flat 50-point bonus is added after the tier calculation only when the purchase is strictly greater than GHS 500. Exactly GHS 500 does not qualify.
+* A purchase strictly greater than GHS 500 receives a flat 50-point bonus after the tier calculation. Exactly GHS 500 does not qualify.
 * A zero-value purchase is accepted and earns 0 points.
-
+These are the behaviours of the inherited code (listed in ANALYSIS.md under "Behaviours the refactor must preserve"). The inherited code had no specification, so they were kept as found.
+ 
 ## 3. Project Structure
-
+ 
 ```text
 src/
 ├── main/java/com/brightline/loyalty/
@@ -76,120 +73,123 @@ src/
     ├── DemoTest.java
     └── LoyaltyServiceFactoryTest.java
 ```
-
-## 4. Calculation and Production Wiring
-
-`PointsCalculator` looks up the member, resolves the rule for the member's tier, calculates base points from the purchase amount, applies the tier rule, and adds the bonus. It receives a `MemberRepository`, `TierPointsRuleResolver`, and `BonusPolicy` through its constructor.
-
-`LoyaltyServiceFactory.productionRules()` creates the standard, silver, and gold rules. `createCalculator()` uses that list to build the resolver and wires it with `InMemoryMemberRepository` and `ThresholdBonusPolicy`. The in-memory repository contains `m1` (STANDARD), `m2` (GOLD), and `m3` (SILVER).
-
-`MemberId` is the typed identifier used by `Member`, `Purchase`, and `MemberRepository`. The demo and in-memory repository construct IDs from strings at their boundaries; the calculation and lookup path uses `MemberId`. `Tier` contains only enum constants; it does not duplicate each constant's name in a label field.
-
+ 
+## 4. How the Calculation Works
+ 
+`PointsCalculator` looks up the member, resolves the rule for the member's tier, calculates base points from the purchase amount, applies the tier rule, and adds the bonus. It receives a `MemberRepository`, a `TierPointsRuleResolver` and a `BonusPolicy` through its constructor.
+ 
+`LoyaltyServiceFactory.productionRules()` creates the standard, silver and gold rules. `createCalculator()` uses that list to build the resolver and wires it with `InMemoryMemberRepository` and `ThresholdBonusPolicy`. The in-memory repository contains members `m1` (STANDARD), `m2` (GOLD) and `m3` (SILVER).
+ 
+`MemberId` is the value type for member identifiers in `Member`, `Purchase` and `MemberRepository`. Raw strings are created into `MemberId` only at the boundaries (the demo and the in-memory repository).
+ 
 ## 5. Key Decisions and Why
-
-| Problem recorded in `ANALYSIS.md` | Decision | Standard reference |
+ 
+Each decision answers a problem recorded in ANALYSIS.md.
+ 
+| ANALYSIS.md problem | Decision | Standard |
 | --- | --- | --- |
-| Tier logic was an `if/else if` chain with no final `else` | Use one `TierPointsRule` implementation per tier. `TierPointsRuleResolver` receives the rules and throws `UnknownTierException` when a tier has none; it never defaults to a multiplier. | §12.2 |
-| A broad catch hid every failure as 0 | `PointsCalculator` catches arithmetic overflow only, wraps it with context, and preserves its cause. Other failures are not converted into a successful result. | §6.1, §6.3 |
-| The calculator created its own repository | Inject the repository, rule resolver, and bonus policy. `LoyaltyServiceFactory` wires production implementations. | §12.5 |
-| A purchase was never validated | `Purchase` validates its member ID and amount when constructed; `PointsCalculator` also rejects a null purchase. | No direct rule |
-| The repository returned `null` for a missing member | `MemberRepository.findById` returns `Optional<Member>`. | No direct rule |
-| One method handled lookup, calculation, output, and errors | Keep calculation, tier rules, bonus policy, and CLI presentation in separate responsibilities. | §12.1, §4.1, §4.2 |
-| Tier and money used weak primitive types | Use `Tier`, `MemberId`, and `BigDecimal`; `Member` is a record that rejects null fields. | No direct rule |
-| Business values were magic numbers | Use named constants for the base-point divisor, tier multipliers, threshold, and bonus. | §3.4 |
-| Calculation printed directly to the console | Keep console output in `Demo`; the calculation service does not print. | §4.4 |
-
+| Defect 1: tier rules in an `if/else if` chain with no final `else` | One `TierPointsRule` class per tier. `TierPointsRuleResolver` receives the list from outside and throws `UnknownTierException` when a tier has no rule. It never falls back to a default multiplier. | §12.2 |
+| Defect 2: `catch (Exception e) { return 0; }` hid every failure | No catch-all. `PointsCalculator` catches only `ArithmeticException` and rethrows it with context. Other failures reach the caller. | §6.1, §6.3 |
+| Defect 3: the calculator built its own repository | Repository, resolver and bonus policy are injected through the constructor. `LoyaltyServiceFactory` is the one place that wires production objects. | §12.5 |
+| Defect 4: purchase never validated | `Purchase` validates itself when it is created. The amount is a `BigDecimal`. `PointsCalculator` rejects a null purchase. | none directly in the standard |
+| Defect 5: `null` returned for a missing member | `MemberRepository.findById` returns `Optional<Member>`. | none directly in the standard |
+| Defect 6: one method doing six jobs | Lookup, tier rule, bonus and output each have their own class. `calculatePoints` only coordinates. | §12.1, §4.1, §4.2 |
+| Defect 7: `String` tier and `double` money | `Tier` enum, `BigDecimal` amounts, `MemberId` value type, and records that reject null fields. | none directly in the standard |
+| Defect 8: magic numbers | Named constants in each class that needs one. | §3.4 |
+| Defect 9: `System.out.println` inside the calculation | The calculation prints nothing. Only `Demo` writes output. | §4.4 |
+ 
 ## 6. Adding a New Tier
-
-To add a tier such as `PLATINUM`, `PointsCalculator`, `TierPointsRuleResolver`, and the existing tier-rule classes do not need to change:
-
+ 
+To add a tier such as `PLATINUM`, `PointsCalculator`, `TierPointsRuleResolver` and the existing tier classes need no edit:
+ 
 1. Add the value to the `Tier` enum.
-2. Implement `TierPointsRule` for the new tier.
-3. Include the rule in `LoyaltyServiceFactory.productionRules()`.
-
-If a tier is added to the enum without a rule, the resolver throws `UnknownTierException`. `LoyaltyServiceFactoryTest.everyTierHasARegisteredRule` checks each enum value against the production rule list.
-
+2. Implement `TierPointsRule` for it in a new class.
+3. Include that rule in `LoyaltyServiceFactory.productionRules()`.
+If a tier is added to the enum without a rule, the resolver throws `UnknownTierException`, and `LoyaltyServiceFactoryTest.everyTierHasARegisteredRule` fails because it runs once for every `Tier` value against the production rule list.
+ 
 ## 7. Validation and Exception Handling
-
-`BrightlineLoyaltyException` extends `RuntimeException`. Callers can catch it for any loyalty failure or catch a child exception for a specific failure. Wrapping code preserves the original cause.
-
-| Failure | Exception | Raised in | Handling and test |
-| --- | --- | --- | --- |
-| Member ID not found | `MemberNotFoundException` | `PointsCalculator` | `Demo` displays the message; tested in `PointsCalculatorTest` and `DemoTest`. |
-| Tier has no registered rule | `UnknownTierException` | `TierPointsRuleResolver` | Propagates to the caller; tested in `TierPointsRuleResolverTest` and `PointsCalculatorTest`. |
-| Null purchase, null or negative amount, or null member ID in a purchase | `InvalidPurchaseException` | `Purchase`, `PointsCalculator` | `Demo` displays the message; tested in `PurchaseTest`, `PointsCalculatorTest`, and `DemoTest`. |
-| Point calculation overflows an `int` | `ArithmeticException` wrapped in `InvalidPurchaseException`, with cause preserved | `PointsCalculator` | `Demo` handles it as a loyalty failure; tested in `PointsCalculatorTest` and `TierPointsRuleTest`. |
-| Amount text is not a number | `NumberFormatException` wrapped in `InvalidPurchaseException`, with cause preserved | `Demo.parseAmount` | Displayed as an expected input error; tested in `DemoTest`. |
-| Amount text is null or blank | `InvalidPurchaseException` | `Demo.parseAmount` | Displayed as an expected input error; tested in `DemoTest`. |
-| Member ID value is null or blank | `IllegalArgumentException` | `MemberId` | Tested in `MemberIdTest`. |
-| Member ID, name, or tier is null | `NullPointerException` | `Member` | Tested in `MemberTest`. |
-| Two rules support the same tier | `IllegalStateException` | `TierPointsRuleResolver` | Tested in `TierPointsRuleResolverTest`. |
-| Null tier passed to the resolver | `NullPointerException` | `TierPointsRuleResolver` | Tested in `TierPointsRuleResolverTest`. |
-| Unexpected runtime failure while processing an example | Original `RuntimeException` | Calculation or its dependencies | `Demo` logs it with `java.util.logging`, including context and cause, and displays a controlled message; tested in `DemoTest`. |
-
-`Demo` handles expected domain and input failures per example, so the remaining examples continue. Unexpected runtime failures are logged and shown as failures, not converted to points. `Demo.main` also has top-level handlers for failures during application wiring or startup.
-
+ 
+`BrightlineLoyaltyException` extends `RuntimeException`. A caller can catch it for any loyalty failure, or catch one of its children for a specific one. Where one exception wraps another, the original is kept as the cause.
+ 
+| Failure | Exception | Raised in | Handled in | Tested in |
+| --- | --- | --- | --- | --- |
+| Member id not found | `MemberNotFoundException` | `PointsCalculator` | `Demo` (prints the message) | `PointsCalculatorTest`, `DemoTest` |
+| Tier with no registered rule | `UnknownTierException` | `TierPointsRuleResolver` | caller | `TierPointsRuleResolverTest`, `PointsCalculatorTest` |
+| Null purchase, null or negative amount, null member id in a purchase | `InvalidPurchaseException` | `Purchase`, `PointsCalculator` | `Demo` (prints the message) | `PurchaseTest`, `PointsCalculatorTest`, `DemoTest` |
+| Amount too large to award points (an `int` overflows) | `ArithmeticException` wrapped in `InvalidPurchaseException`, cause kept | `PointsCalculator` (the only `catch` in the service) | `Demo` | `PointsCalculatorTest`, `TierPointsRuleTest` |
+| Amount text is not a number | `NumberFormatException` wrapped in `InvalidPurchaseException`, cause kept | `Demo.parseAmount` | `Demo` | `DemoTest` |
+| Amount text is null or blank | `InvalidPurchaseException` | `Demo.parseAmount` | `Demo` | `DemoTest` |
+| Null or blank member id value | `IllegalArgumentException` | `MemberId` | caller | `MemberIdTest` |
+| Null member id, name or tier | `NullPointerException` | `Member` | caller | `MemberTest` |
+| Two rules for the same tier | `IllegalStateException` | `TierPointsRuleResolver` | caller | `TierPointsRuleResolverTest` |
+| Null tier passed to the resolver | `NullPointerException` | `TierPointsRuleResolver` | caller | `TierPointsRuleResolverTest` |
+| Unexpected `RuntimeException` while processing an example | unchanged | anywhere | `Demo` logs it at `SEVERE` with its cause and prints a controlled message | `DemoTest` |
+ 
+`Demo` is the outer boundary. It catches `BrightlineLoyaltyException` for each example and prints the message. It also catches an unexpected `RuntimeException` for each example, logs it with `java.util.logging` including the cause, and prints "Unable to process this purchase right now." The failure is shown as a failure, never as a success. It is not hidden.
+ 
 ## 8. Tests
-
-The test suite uses JUnit 5 and Mockito. `PointsCalculatorTest` injects a Mockito mock of `MemberRepository` into the real calculator, tier rules, and bonus policy. Tests assert results, exception types, messages, or causes.
-
-| Test class | Test cases | Coverage |
-| --- | ---: | --- |
-| `PointsCalculatorTest` | 17 | Nine tier-and-amount results, zero amount, null purchase, unknown member, missing tier rule, and four overflow cases with cause preservation. |
-| `TierPointsRuleTest` | 14 | Each rule's tier and calculations for multiple base-point values; Silver and Gold overflow. |
-| `DemoTest` | 11 | Demo output, amount parsing and parse cause, null and blank amounts, null member ID, and unexpected-failure logging with a controlled message. |
-| `ThresholdBonusPolicyTest` | 5 | Bonus behavior at and around the GHS 500 threshold. |
-| `MemberIdTest` | 5 | Retains a valid ID and rejects null and blank values. |
-| `PurchaseTest` | 5 | Valid and zero purchases; null member ID, null amount, and negative amount. |
-| `MemberTest` | 4 | Retains member fields and rejects null ID, name, or tier. |
-| `InMemoryMemberRepositoryTest` | 4 | Finds the three seeded members; returns an empty `Optional` for an unknown ID. |
-| `TierPointsRuleResolverTest` | 4 | Resolves a registered rule and rejects an unknown tier, duplicate rule, or null tier. |
-| `LoyaltyServiceFactoryTest` | 4 | Registers a rule for every enum tier and creates a calculator that awards points to a seeded member. |
-
-**Latest verification.** `mvn clean verify` with JDK 25.0.5 and Maven 3.9.15 recorded 73 tests, 0 failures, 0 errors, and 0 skipped.
-
-**Coverage.** JaCoCo wrote the report to `target/site/jacoco/index.html`. The run recorded 614/636 instructions (96.54%), 139/144 lines (96.53%), and 24/24 branches (100%). The uncovered instructions are in the two top-level catch handlers in `Demo.main`; per-example expected and unexpected failures are tested.
-
-**Known test omission.** Tests do not directly assert the `Objects.requireNonNull` constructor guards in `PointsCalculator` or `TierPointsRuleResolver`.
-
-## 9. The Improvement Beyond the Brief: Parameterized Tests
-
-Ten parameterized test methods use `@MethodSource`, `@CsvSource`, `@EnumSource`, `@ValueSource`, and `@NullAndEmptySource`. The tier rules and bonus policy are input/output tables, so the same test body checks multiple cases.
-
-The nine rows in `PointsCalculatorTest` cover tier calculations, truncation, and the bonus boundary:
-
-| Tier | Amount | Expected points |
-| --- | ---: | ---: |
-| STANDARD | 99.99 | 9 |
-| STANDARD | 500 | 50 |
-| STANDARD | 500.01 | 100 |
-| SILVER | 10 | 1 |
-| SILVER | 50 | 7 |
-| SILVER | 200 | 30 |
-| GOLD | 250 | 50 |
-| GOLD | 500 | 100 |
-| GOLD | 500.01 | 150 |
-
-The suite also checks four overflow inputs at different calculation steps (base points, Silver result, Gold result, and bonus addition) with one parameterized test body. Parameterized tests make it easier to add cases, but do not prove that the suite detects every possible defect.
-
+ 
+The suite uses JUnit 5 and Mockito. `PointsCalculatorTest` injects a Mockito mock of `MemberRepository` into the real calculator, real rules and the real bonus policy. Each test asserts a calculated value, an exact exception type, a message or a cause, not only that a mock was called.
+ 
+| Test class | Tests | What it proves |
+| --- | --- | --- |
+| `PointsCalculatorTest` | 17 | The nine-row points table, zero amount, null purchase, unknown member, tier with no rule, and four overflow cases with the cause kept. |
+| `TierPointsRuleTest` | 14 | Each rule declares its tier and gives the right result for several base-point values. Silver and gold fail loudly on overflow. |
+| `DemoTest` | 11 | The demo's printed output, amount parsing, the cause of a parse failure, null and blank amounts, null member id, and a logged unexpected failure with a controlled message. |
+| `ThresholdBonusPolicyTest` | 5 | The bonus applies only strictly above GHS 500. |
+| `MemberIdTest` | 5 | Null and blank ids are rejected. |
+| `PurchaseTest` | 5 | Valid, zero, null member id, null amount and negative amount. |
+| `MemberTest` | 4 | Values are kept. Null id, name and tier are rejected. |
+| `InMemoryMemberRepositoryTest` | 4 | The three seeded members are found. An unknown id gives an empty `Optional`. |
+| `TierPointsRuleResolverTest` | 4 | The registered rule is returned. An unknown tier, a duplicate rule and a null tier are rejected. |
+| `LoyaltyServiceFactoryTest` | 4 | Every `Tier` has a production rule. The production calculator awards points to a seeded member. |
+ 
+**Results.** The last saved Maven run (JDK 25.0.5, 2026-11-19) recorded 73 tests with 0 failures, 0 errors and 0 skipped.
+ 
+**Coverage.** The JaCoCo report saved by that run recorded 614 of 636 instructions (96.54%), 144 of 149 lines and 24 of 24 branches. The only uncovered code is the two catch handlers in `Demo.main`. The standard (§9) asks for 100% coverage of statements and branches, so this is a known gap.
+ 
+**Not asserted by any test:** the `Objects.requireNonNull` checks in the constructors of `PointsCalculator` and `TierPointsRuleResolver`.
+ 
+## 9. The One Improvement Beyond the Brief: Parameterized Tests
+ 
+Ten test methods are parameterized, using `@MethodSource`, `@CsvSource`, `@EnumSource` and `@ValueSource`. The tier rules and the bonus policy are tables of input to output, so one test body runs against many rows.
+ 
+* **Boundaries and truncation are where this code is most likely to break.** These rows (`PointsCalculatorTest`) pin the behaviour:
+  | Tier | Amount | Expected points |
+  | --- | --- | --- |
+  | STANDARD | 99.99 | 9 |
+  | STANDARD | 500 | 50 |
+  | STANDARD | 500.01 | 100 |
+  | SILVER | 10 | 1 |
+  | SILVER | 50 | 7 |
+  | SILVER | 200 | 30 |
+  | GOLD | 250 | 50 |
+  | GOLD | 500 | 100 |
+  | GOLD | 500.01 | 150 |
+  A single-input test can pass by coincidence. A table with boundary rows cannot.
+* **A new tier costs one set of table rows, not a new test method.**
+* **A guard against forgetting a rule.** `@EnumSource(Tier.class)` runs once per tier and asserts that the production wiring has a rule for it.
+* **The overflow cases are rows too.** Four amounts that overflow at different steps (base points, the Silver result, the Gold result and the bonus) are checked by one test body.
+What it does not do: parameterized tests show that more cases pass. They do not prove the suite would catch every bug.
+ 
 ## 10. Requirements and Commands
-
-The Maven compiler is configured for Java 25 using `maven.compiler.release` in `pom.xml`. The verified environment used JDK 25.0.5 and Maven 3.9.15. JUnit 5 and Mockito are test-scoped dependencies; JaCoCo generates coverage, and the exec plugin runs the demo.
-
-Run tests and generate the coverage report:
-
+ 
+The Maven compiler is configured for Java 25 (`maven.compiler.release` in `pom.xml`). The saved test run used JDK 25.0.5.
+ 
+Run the tests and generate the coverage report (`target/site/jacoco/index.html`):
+ 
 ```shell
 mvn clean verify
 ```
-
+ 
 Run the demo:
-
+ 
 ```shell
 mvn compile exec:java
 ```
-
-The exec plugin is configured to run `com.brightline.loyalty.Demo`. The verified demo output is:
-
+ 
+The exec plugin is configured to run `com.brightline.loyalty.Demo`. Its output is:
+ 
 ```text
 Result m1, GHS 100 -> 10 points
 Result m2, GHS 250 -> 50 points
@@ -198,25 +198,26 @@ Result unknown, GHS 100 -> Member not found: unknown
 Result m1, GHS -50 -> Purchase amount must not be negative: -50
 Result m1, GHS abc -> Purchase amount is not a number: abc
 ```
-
-## 11. What Was Kept, Fixed, or Rewritten
-
+ 
+## 11. What Was Kept, Fixed or Rewritten
+ 
 | Item | Decision | Reason |
 | --- | --- | --- |
-| Points formula: one point per GHS 10, tier multipliers, and bonus above GHS 500 | Kept | Preserves the observed behavior, including truncation. |
-| `Member` | Rewritten as a record with `MemberId` and `Tier` | Replaces weak raw identifier and tier types. |
-| `MemberRepository` | Fixed | Returns `Optional<Member>` and accepts `MemberId`. |
-| `InMemoryMemberRepository` | Fixed | Keeps the three seeded members and returns an `Optional`. |
-| `PointsCalculator` | Rewritten | Coordinates injected dependencies without printing or swallowing failures. |
-| `Demo` | Rewritten | Owns CLI output, input parsing, and boundary error handling. |
-| Three inherited tests | Rewritten | As documented in `ANALYSIS.md`, none asserted a correct calculated value. |
-| `Tier`, `MemberId`, `Purchase`, exception types, tier rules, bonus policy, and `LoyaltyServiceFactory` | Added | Provide typed domain data, validation, extensible rules, and application wiring. |
-
-## 12. Decisions Not Settled by `ANALYSIS.md`
-
-* The base-points formula is implemented in `PointsCalculator` with the named constant `GHS_PER_POINT` and a private method; it is not a separate class.
-* `PointsCalculator` catches `ArithmeticException` to report overflow as `InvalidPurchaseException` while retaining the cause.
-* `MemberId` rejects null or blank values with `IllegalArgumentException`, outside the `BrightlineLoyaltyException` hierarchy.
-* `Demo.parseAmount` parses text at the CLI boundary, so `Purchase` receives a `BigDecimal`.
-* `Demo` logs unexpected per-example failures at `SEVERE` and continues to the next example.
-* The `STANDARD` rule applies a multiplier of 1, so every tier uses the same rule interface.
+| Points formula (1 per GHS 10, tier multipliers, bonus above 500) | Kept | Behaviour preserved, including truncation. |
+| `Member` | Rewritten as a record with a `MemberId` and a `Tier` | The fields were right, but the `String` tier and the raw id were weak. |
+| `MemberRepository` | Fixed | Returns `Optional<Member>` and takes a `MemberId`. |
+| `InMemoryMemberRepository` | Fixed | Same three members, looked up through `Optional.ofNullable(...)`. |
+| `PointsCalculator` | Rewritten | Six jobs split into separate classes. |
+| `Demo` | Rewritten | Writes through an injected `PrintWriter`, shows the failure paths and handles its own errors. |
+| All three original tests | Rewritten | None of them asserted a correct value. Replaced by the suite in section 8. |
+| `Tier`, `MemberId`, `Purchase`, the exceptions, the rules, the bonus policy, `LoyaltyServiceFactory` | New | Each answers a problem listed in section 5. |
+ 
+## 12. Decisions Not Settled by ANALYSIS.md
+ 
+* The base-points formula (one point per GHS 10) lives in `PointsCalculator` as a named constant and one private method, not in a separate class.
+* `PointsCalculator` has one `catch`, for `ArithmeticException`, to turn an overflow into `InvalidPurchaseException` with context.
+* `MemberId` rejects null or blank values with `IllegalArgumentException`, which is outside the `BrightlineLoyaltyException` hierarchy.
+* `Demo` parses text amounts itself (`Demo.parseAmount`), so `Purchase` only ever receives a `BigDecimal`.
+* `Demo` logs unexpected failures at `SEVERE` and continues with the next example, as described in section 7.
+* The `STANDARD` rule applies a multiplier of 1, so every tier goes through the same rule interface.
+ 
